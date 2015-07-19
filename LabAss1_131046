@@ -1,0 +1,172 @@
+# Lan simulation for the given figure
+# Initialization of ns by calling Simulator class using keyword new
+set ns [new Simulator]
+
+# Define colors for data flows
+$ns color 1 Blue
+$ns color 2 Red
+$ns color 3 Green
+
+# Open tracefiles
+# Create a tracefile out.tr, call it using the pointer tracefile1, open it in writing mode 
+set tracefile1 [open out.tr w]
+set winfile [open winfile w]
+$ns trace-all $tracefile1
+
+# Open nam file
+# Create NAM (network animator) file out.nam, call it using the pointer namfile, open it in writing mode
+set namfile [open out.nam w]
+$ns namtrace-all $namfile
+
+# Define the finish procedure
+# Keyword proc is used to declare a procedure here it is finish.
+
+proc finish {} { \
+# To specify the accessibility of variables of procedure
+global ns tracefile1 namfile
+# Inbuilt method for flushing the traces 
+$ns flush-trace
+# Close the tracefile, namfile
+close $tracefile1
+close $namfile
+# Execute animated version of file
+exec nam out.nam &
+# Exit the application and return 0
+exit 0
+} 
+# End of procedure finish
+
+# Create eleven nodes as per requirement, i.e. recently created node is pointed by n(i), 
+# To refer to particular node, we can use $n(i).
+
+set n0 [$ns node]
+set n1 [$ns node]
+set n2 [$ns node]
+set n3 [$ns node]
+set n4 [$ns node]
+set n5 [$ns node]
+set n6 [$ns node]
+set n7 [$ns node]
+set n8 [$ns node]
+set n9 [$ns node]
+set n10 [$ns node]
+
+# Specifying color and shape for the node 
+$n1 color Red
+$n1 shape box
+
+# Create links between the nodes
+# duplex-link suggests bi-directional link, between nodes n(i) and n(j) with 
+# capacity of 10 Mb/sec and a propagation delay of 10 ms.
+# DropTail – if the buffers of queue are full then the packets coming in are dropped
+
+$ns duplex-link $n0 $n1 2Mb 10ms DropTail
+$ns duplex-link $n0 $n3 2Mb 10ms DropTail
+$ns duplex-link $n1 $n2 2Mb 10ms DropTail
+$ns duplex-link $n2 $n3 2Mb 10ms DropTail
+# Setting up an intermediate lan connection (as a bus topology) as shown in figure among nodes 2,4,9
+# with bandwidth 0.5Mb, delay 40ms, type Link Layer, DropTail type Queue, MAC type, Csma channel
+set lan [$ns newLan "$n2 $n4 $n9" 0.5Mb 40ms LL Queue/DropTail MAC/Csma/Cd Channel]
+$ns duplex-link $n4 $n5 2Mb 10ms DropTail
+$ns duplex-link $n4 $n6 2Mb 10ms DropTail
+$ns duplex-link $n5 $n6 2Mb 10ms DropTail
+$ns duplex-link $n6 $n7 2Mb 10ms DropTail
+$ns duplex-link $n6 $n8 2Mb 10ms DropTail
+$ns duplex-link $n9 $n10 2Mb 10ms DropTail
+
+# Give the relative node position
+$ns duplex-link-op $n0 $n1 orient down
+$ns duplex-link-op $n0 $n3 orient right-down
+$ns duplex-link-op $n1 $n2 orient right
+$ns duplex-link-op $n2 $n3 orient up
+$ns duplex-link-op $n4 $n5 orient right-up	
+$ns duplex-link-op $n4 $n6 orient right-down
+$ns duplex-link-op $n5 $n6 orient down
+$ns duplex-link-op $n6 $n7 orient left-down
+$ns duplex-link-op $n6 $n8 orient right-down
+$ns duplex-link-op $n9 $n10 orient right
+# Maximum queue size of link from node 2 to 3
+$ns queue-limit $n2 $n3 20
+
+ # Setup TCP connection
+# Calling an inbuilt pointer called TCP from ns to initiate the connection
+set tcp [new Agent/TCP/Newreno]
+# Specifying node 2 as a source for TCP
+$ns attach-agent $n2 $tcp
+# Calling an inbuilt pointer called TCP from ns as a destination for packets transferred over TCP
+set sink [new Agent/TCPSink/DelAck]
+# Specifying node 7 as a sink for TCP
+$ns attach-agent $n7 $sink
+# Connection of TCP Sink and Source
+$ns connect $tcp $sink
+# owe id for TCP is 1
+$tcp set fid_ 1
+# Setting the packet size of TCP
+$tcp set packet_size_ 1000
+
+# Set ftp over tcp connection
+# Calling an inbuilt pointer called FTP from ns 
+set ftp [new Application/FTP]
+# Connection of TCP and FTP
+$ftp attach-agent $tcp
+
+# Setup a UDP connection
+# Calling an inbuilt pointer called UDP from ns 
+set udp [new Agent/UDP]
+# Specifying node 1 as a source for UDP
+$ns attach-agent $n1 $udp	
+# Specifying node 10 as a sink for UDP
+set null [new Agent/Null]
+$ns attach-agent $n10 $null
+# Connection of UDP Sink and Source
+$ns connect $udp $null
+# owe id for UDP is 2
+$udp set fid_ 2
+
+# Setup CBR over UDP connection
+# Calling an inbuilt pointer called CBR from ns 
+set cbr [new Application/Traffic/CBR]
+# Connection of CBR and UDP
+$cbr attach-agent $udp
+# Setting necessary parameters for CBR
+$cbr set type_ CBR
+$cbr set packet_size_ 1000
+$cbr set rate_ 0.01Mb
+$cbr set random_ false
+
+# Similar to previous one, setup UDP connection between nodes 8 to 0
+set udp1 [new Agent/UDP]
+$ns attach-agent $n8 $udp1
+set null1 [new Agent/Null]
+$ns attach-agent $n0 $null1
+$ns connect $udp1 $null1
+$udp1 set fid_ 3
+
+set cbr1 [new Application/Traffic/CBR]
+$cbr1 attach-agent $udp1
+$cbr1 set type_ CBR
+$cbr1 set packet_size_ 1000
+$cbr1 set rate_ 0.01Mb
+$cbr1 set random_ false
+
+# Scheduling the events
+$ns at 0.1 "$cbr start"
+$ns at 0.1 "$cbr1 start"
+$ns at 1.0 "$ftp start"
+$ns at 124.0 "$ftp stop"
+$ns at 125.5 "$cbr stop"
+$ns at 125.5 "$cbr1 stop"
+
+proc plotWindow {tcpSource file} { \
+global ns
+set time 0.1
+set now [$ns now]
+set cwnd [$tcpSource set cwnd_]
+puts $file "$now $cwnd"
+ $ns at [expr $now+$time] "plotWindow $tcpSource $file"
+}
+$ns at 0.1 "plotWindow $tcp $winfile"
+# Entire operation ends at 125 seconds by calling procedure finish
+$ns at 125.0 "finish"
+# We can begin the simulation by writing this command 
+$ns run
